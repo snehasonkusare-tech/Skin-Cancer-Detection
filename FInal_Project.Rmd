@@ -1,0 +1,606 @@
+---
+title: "Skin Disease Detection"
+author: "Rohanraje Bhosale"
+date: "2024-04-30"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(jpeg)
+library(imager)
+library(abind)
+library(caret)
+library(glmnet)
+
+```
+
+
+```{r}
+# Function to read images and convert them to an array
+read_images <- function(directory) {
+  # List all JPEG files in the directory
+  files <- list.files(directory, pattern = "\\.jpg$", full.names = TRUE)
+  images <- lapply(files, function(file) {
+    img <- readJPEG(file)
+    array(as.vector(img), dim = c(dim(img)[1], dim(img)[2], dim(img)[3]))
+  })
+  # Convert list of matrices to an array
+  do.call(abind, c(images, list(along = 4)))
+}
+```
+
+
+```{r}
+# Function to flatten images
+flatten_images <- function(images) {
+    array_dim <- dim(images)
+    array(as.vector(images), dim = c(array_dim[1] * array_dim[2] * array_dim[3], array_dim[4]))
+}
+
+```
+
+
+
+
+```{r}
+# Paths to image folders
+folder_benign_train <- '/Users/rohanrajebhosale/Documents/ADM/Final_Report/benign'
+folder_malignant_train <- '/Users/rohanrajebhosale/Documents/ADM/Final_Report/malignant'
+
+
+# Load all images
+X_benign <- read_images(folder_benign_train)
+X_malignant <- read_images(folder_malignant_train)
+
+# Create labels
+y_benign <- rep(0, dim(X_benign)[4])
+y_malignant <- rep(1, dim(X_malignant)[4])
+
+# Merge all data
+X_all <- abind(X_benign, X_malignant, along = 4)
+y_all <- c(y_benign, y_malignant)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Calculate the indices for the split
+index <- sample(1:dim(X_all)[4], size = floor(0.8 * dim(X_all)[4]))
+
+# Create train and test sets
+X_train <- X_all[,,,index]
+X_test <- X_all[,,,-index]
+y_train <- y_all[index]
+y_test <- y_all[-index]
+
+
+
+
+```
+
+
+```{r}
+# Print a summary of the training and testing data sizes
+cat("Training data size:", length(y_train), "images\n")
+cat("Testing data size:", length(y_test), "images\n")
+
+```
+
+
+
+```{r}
+# Function to flatten images
+flatten_images <- function(images) {
+    array_dim <- dim(images)
+    array(as.vector(images), dim = c(array_dim[1] * array_dim[2] * array_dim[3], array_dim[4]))
+}
+
+```
+
+
+```{r}
+# Flatten the images
+X_train_flat <- flatten_images(X_train)
+X_test_flat <- flatten_images(X_test)
+
+# Print a summary of the training and testing data sizes
+cat("Training data size:", dim(X_train_flat)[2], "flattened images\n")
+cat("Testing data size:", dim(X_test_flat)[2], "flattened images\n")
+
+```
+
+
+```{r}
+# Check dimensions of the training labels and flattened image data
+print(length(y_train))
+print(dim(X_train_flat))  # This will show NULL if X_train_flat is not a matrix
+
+# Reshape the flat image data if it isn't already a matrix
+if (is.null(dim(X_train_flat))) {
+  num_features <- 100  # Adjust this number based on the actual number of features
+  X_train_flat <- matrix(X_train_flat, nrow = length(y_train), ncol = num_features, byrow = TRUE)
+}
+
+# Check dimensions again
+print(dim(X_train_flat))
+
+```
+
+
+```{r}
+# Calculate the number of features per sample
+num_features <- length(X_train_flat) / length(y_train)
+
+# Reshape X_train_flat into a matrix
+X_train_flat_matrix <- matrix(X_train_flat, nrow = length(y_train), ncol = num_features, byrow = TRUE)
+
+```
+
+
+```{r}
+# Assign column names to the X_train_flat_matrix
+colnames(X_train_flat_matrix) <- paste0("V", 1:ncol(X_train_flat_matrix))
+
+# Reduce dimensionality with PCA
+preProc <- preProcess(X_train_flat_matrix, method = "pca", pcaComp = 50)  # Retain top 50 principal components
+X_train_pca <- predict(preProc, X_train_flat_matrix)
+
+# Set up training control with a progress bar
+train_control <- trainControl(method = "none", allowParallel = TRUE)
+
+# Fit the model using caret for easier handling
+logistic_model <- train(x = X_train_pca, y = y_train, method = "glm", family = "binomial", trControl = train_control)
+
+```
+
+
+```{r}
+# Assuming you have X_test_flat defined and num_features already known
+num_features <- 150528  # This should match the number used when creating X_train_flat_matrix
+
+# Number of test samples (assuming X_test_flat is correctly sized)
+num_samples_test <- length(X_test_flat) / num_features
+
+# Reshape X_test_flat to a matrix
+X_test_flat_matrix <- matrix(X_test_flat, nrow = num_samples_test, ncol = num_features, byrow = TRUE)
+
+# Optionally, assign column names as per your training data
+colnames(X_test_flat_matrix) <- paste0("Feature_", 1:num_features)
+
+```
+
+
+```{r}
+# Print the summary of the PCA preprocessing model to understand what it's expecting
+print(summary(preProc))
+
+# Check the first few columns of the test data to ensure they match expected structure
+print(colnames(X_test_flat_matrix)[1:10])
+
+# Check the dimensions explicitly
+print(dim(X_train_flat_matrix))
+print(dim(X_test_flat_matrix))
+
+```
+
+```{r}
+# Assuming X_train_flat_matrix and X_test_flat_matrix are matrix types with proper dimensions
+# Reapply PCA to ensure no mismatches
+preProc <- preProcess(X_train_flat_matrix, method = "pca", pcaComp = 50, center = TRUE, scale = TRUE)
+X_train_pca <- predict(preProc, X_train_flat_matrix)
+
+
+
+
+```
+
+
+
+
+```{r}
+# Print details of the PCA preProcess object
+print(preProc)
+
+```
+
+```{r}
+# Check the dimensions and column names of both matrices
+print(dim(X_train_flat_matrix))
+print(dim(X_test_flat_matrix))
+print(colnames(X_train_flat_matrix)[1:10])
+print(colnames(X_test_flat_matrix)[1:10])
+
+```
+
+```{r}
+# Adjust PCA application
+if (!inherits(X_test_flat_matrix, "matrix")) {
+    X_test_flat_matrix <- as.matrix(X_test_flat_matrix)
+}
+
+# Reassign column names to ensure alignment
+colnames(X_test_flat_matrix) <- colnames(X_train_flat_matrix)
+
+# Try applying PCA again
+X_test_pca <- predict(preProc, X_test_flat_matrix)
+
+```
+
+
+```{r}
+# Check the dimensions of the transformed test data
+print(dim(X_test_pca))
+
+# Optionally, view a summary or some part of the transformed data to verify it looks as expected
+summary(X_test_pca)
+
+```
+
+```{r}
+# Example: Making Predictions
+logistic_predictions <- predict(logistic_model, newdata = as.data.frame(X_test_pca), type = "raw")
+logistic_predicted_classes <- ifelse(logistic_predictions > 0.5, 1, 0)
+
+# Calculate accuracy or other performance metrics
+logistic_accuracy <- mean(logistic_predicted_classes == y_test)
+print(paste("Logistic Regression Accuracy:", logistic_accuracy))
+
+# Example: Visualization
+library(ggplot2)
+df_pca <- data.frame(PC1 = X_test_pca[, 1], PC2 = X_test_pca[, 2], Class = as.factor(y_test))
+ggplot(df_pca, aes(x = PC1, y = PC2, color = Class)) +
+  geom_point(alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "PCA Plot of Test Data", x = "Principal Component 1", y = "Principal Component 2")
+
+```
+
+
+```{r}
+library(caret)
+set.seed(123)  # for reproducibility
+fold_control <- trainControl(method = "cv", number = 10, savePredictions = "final")
+
+
+logistic_model_cv <- train(x = X_train_pca, y = y_train, method = "glm", 
+                           family = "binomial", trControl = fold_control)
+
+print(logistic_model_cv)
+
+```
+
+```{r}
+set.seed(123)  # for consistency
+kmeans_result <- kmeans(X_train_pca[, 1:2], centers = 3)  # you might choose more centers based on your data
+plot(X_train_pca[, 1], X_train_pca[, 2], col = kmeans_result$cluster)
+points(kmeans_result$centers[, 1], kmeans_result$centers[, 2], col = 1:3, pch = 8, cex = 2)
+
+```
+
+
+
+```{r}
+
+###################### LOGISTIC REGRESSION ###################
+
+# Example: Predict using a logistic model trained on PCA-transformed training data
+logistic_predictions <- predict(logistic_model, newdata = as.data.frame(X_test_pca), type = "raw")
+logistic_predicted_classes <- ifelse(logistic_predictions > 0.5, 1, 0)
+
+# Calculate accuracy or other performance metrics
+logistic_accuracy <- mean(logistic_predicted_classes == y_test)
+print(paste("Logistic Regression Accuracy:", logistic_accuracy))
+
+```
+
+```{r}
+
+
+# Ensure the predictions and actual values are factors and have the same levels
+logistic_predicted_classes <- factor(logistic_predicted_classes, levels = c(0, 1))
+y_test_factor <- factor(y_test, levels = c(0, 1))
+
+# Calculate the confusion matrix
+conf_mat_logistic <- confusionMatrix(logistic_predicted_classes, y_test_factor)
+print(conf_mat_logistic)
+
+# The confusionMatrix function also prints out several performance metrics automatically
+
+
+```
+
+
+
+
+```{r}
+
+###################### Random Forest  ###################
+
+library(randomForest)
+# Train the Random Forest model
+rf_model <- randomForest(x = as.data.frame(X_train_pca), y = as.factor(y_train), ntree = 500, mtry = 7, importance = TRUE)
+
+# Print model summary
+print(rf_model)
+```
+
+
+
+```{r}
+# Make predictions - getting probabilities
+rf_probs <- predict(rf_model, newdata = as.data.frame(X_test_pca), type = "prob")
+# Assuming your positive class label is 1, adjust if necessary
+rf_prob_positive <- rf_probs[, "1"]
+
+# Calculate accuracy
+rf_predictions <- ifelse(rf_prob_positive > 0.5, 1, 0)  # Assuming the positive class is '1'
+rf_accuracy <- mean(rf_predictions == y_test)
+print(paste("Random Forest Accuracy:", rf_accuracy))
+```
+
+
+```{r}
+
+
+# Ensure the predictions and actual values are factors and have the same levels
+rf_predicted_classes <- factor(rf_predictions, levels = c(0, 1))
+y_test_factor <- factor(y_test, levels = c(0, 1))
+
+# Calculate the confusion matrix
+conf_mat_rf <- confusionMatrix(rf_predicted_classes, y_test_factor)
+print(conf_mat_rf)
+
+# The confusionMatrix function also prints out several performance metrics automatically
+
+```
+
+
+
+```{r}
+
+###################### CV  ###################
+
+library(caret)
+set.seed(530)  # For reproducibility
+
+# Define training control
+train_control <- trainControl(method = "cv", number = 5)  # 5-fold cross-validation
+
+# Train the model using cross-validation
+model_cv <- train(as.data.frame(X_train_pca), y_train, method = "rf",
+                  trControl = train_control, 
+                  tuneLength = 5,  # Tune over 5 different mtry values
+                  ntree = 100)  # Using fewer trees for faster computation during tuning
+
+# Print out the results
+print(model_cv)
+```
+
+
+```{r}
+
+###################### SVM ###################
+
+library(e1071)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the SVM model on the PCA-transformed training data
+# The choice of 'radial' as the kernel type is common, but you might experiment with others like 'linear', 'polynomial', etc.
+svm_model <- svm(x = X_train_pca, y = as.factor(y_train), kernel = 'radial', cost = 1, scale = FALSE)
+
+# Print the model summary
+print(svm_model)
+
+# Predict using the trained SVM model on the PCA-transformed test data
+svm_predictions <- predict(svm_model, X_test_pca)
+
+# Evaluate model accuracy
+svm_accuracy <- mean(svm_predictions == y_test)
+print(paste("SVM Model Accuracy:", svm_accuracy))
+
+```
+
+
+```{r}
+# Ensure both predictions and actual responses are factors with the same levels
+svm_predictions_factor <- factor(svm_predictions, levels = levels(as.factor(y_train)))
+y_test_factor <- factor(y_test, levels = levels(as.factor(y_train)))
+
+# Note: It's important that levels of y_train are used to define the factor levels to cover all possible classes
+
+# Calculate the confusion matrix
+conf_mat <- confusionMatrix(svm_predictions_factor, y_test_factor)
+
+# Print the confusion matrix and associated statistics
+print(conf_mat)
+
+# Example of accessing additional metrics
+accuracy <- conf_mat$overall['Accuracy']
+sensitivity <- conf_mat$byClass['Sensitivity']
+specificity <- conf_mat$byClass['Specificity']
+precision <- conf_mat$byClass['Positive Predictive Value']
+F1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)  # Calculating F1 Score
+
+# Print metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Sensitivity (Recall):", sensitivity, "\n")
+cat("Precision (PPV):", precision, "\n")
+cat("F1 Score:", F1_score, "\n")
+
+```
+
+
+
+```{r}
+library(pROC)
+# Assuming logistic_model is your trained logistic regression model
+logistic_probs <- predict(logistic_model, newdata = as.data.frame(X_test_pca), type = "raw")
+svm_probs <- predict(svm_model, newdata = as.data.frame(X_test_pca), probability = TRUE)
+svm_probs <- as.numeric(svm_probs)
+
+# ROC for Logistic Regression
+roc_logistic <- roc(y_test, logistic_probs)
+auc_logistic <- auc(roc_logistic)
+
+ #ROC for SVM
+#roc_svm <- roc(y_test, svm_probs)
+#auc_svm <- auc(roc_svm)#
+
+# ROC for Random Forest
+roc_rf <- roc(y_test, rf_prob_positive)
+auc_rf <- auc(roc_rf)
+
+
+
+plot(roc_logistic, main = "Comparison of ROC Curves", col = "red", lwd = 2)
+plot(roc_rf, add = TRUE, col = "darkgreen", lwd = 2)
+
+# Adding a legend
+legend("bottomright", 
+       legend = c(paste("Logistic (AUC=", round(auc_logistic, 2), ")"),
+                  paste("Random Forest (AUC=", round(auc_rf, 2), ")")),
+       col = c("red", "darkgreen"), 
+       lwd = 2)
+```
+
+
+
+```{r}
+# Print accuracies of all models
+print(paste("Random Forest Accuracy:", rf_accuracy))
+print(paste("Logistic Regression Accuracy:", logistic_accuracy))
+print(paste("SVM Accuracy:", svm_accuracy))
+
+
+
+```
+
+
+```{r}
+
+######################. TUNED SVM ###################
+
+library(caret)
+
+
+
+
+# Define the training control using cross-validation
+train_control <- trainControl(method = "cv", number = 10)
+
+# Set up the tuning grid with correct parameter names
+tune_grid <- expand.grid(
+  sigma = 10^seq(-2, 1, by = 1),  # Adjust range as needed
+  C = 10^seq(-2, 1, by = 1)       # Adjust range as needed
+)
+
+# Tune the SVM model
+svm_tuned_model <- train(x = X_train_pca, y = as.factor(y_train), method = "svmRadial",
+                         trControl = train_control, tuneGrid = tune_grid)
+
+# Check the best parameters and accuracy
+print(svm_tuned_model)
+
+
+```
+
+
+```{r}
+train_control <- trainControl(method = "cv", number = 10)
+
+# Define the tuning grid based on the optimal parameters
+tune_grid <- expand.grid(sigma = 0.01, C = 10)
+
+# Train the SVM model using the radial basis function kernel
+svm_model <- train(x = X_train_pca, y = as.factor(y_train), method = "svmRadial",
+                   trControl = train_control, tuneGrid = tune_grid, preProcess = "scale")
+
+# Print the trained model details
+print(svm_model)
+
+
+
+```
+
+```{r}
+# Predict on the test data
+svm_predictions <- predict(svm_model, X_test_pca)
+
+# Calculate accuracy
+svm_accuracy <- mean(svm_predictions == y_test)
+print(paste("SVM Model Accuracy:", svm_accuracy))
+ 
+```
+
+
+```{r}
+library(caret)
+
+# Ensure the predictions and actual values are factors and have the same levels
+svm_predicted_classes <- factor(svm_predictions, levels = unique(y_test))
+y_test_factor <- factor(y_test, levels = unique(y_test))
+
+# Calculate the confusion matrix
+conf_mat_svm <- confusionMatrix(svm_predicted_classes, y_test_factor)
+print(conf_mat_svm)
+
+# The confusionMatrix function also prints out several performance metrics automatically
+
+```
+
+
+
+```{r}
+library(caret)
+library(pROC)
+
+# Predict probabilities for Logistic Regression
+logistic_probs <- predict(logistic_model, newdata = as.data.frame(X_test_pca), type = "raw")
+
+# Compute ROC curve and AUC
+roc_logistic <- roc(as.factor(y_test), logistic_probs)
+auc_logistic <- auc(roc_logistic)
+
+# Plot ROC curve for Logistic Regression
+plot(roc_logistic, main = "ROC Curve for Logistic Regression", col = "red", lwd = 2)
+legend("bottomright", legend = c(paste("AUC = ", round(auc_logistic, 2))),
+       col = c("red"), lwd = 2)
+
+```
+
+
+```{r}
+library(randomForest)
+library(pROC)
+
+# Predict probabilities for Random Forest
+rf_probs <- predict(rf_model, newdata = X_test_pca, type = "prob")
+rf_prob_positive <- rf_probs[, "1"]
+
+# Compute ROC curve and AUC
+roc_rf <- roc(as.factor(y_test), rf_prob_positive)
+auc_rf <- auc(roc_rf)
+
+# Plot ROC curve for Random Forest
+plot(roc_rf, main = "ROC Curve for Random Forest", col = "darkgreen", lwd = 2)
+legend("bottomright", legend = c(paste("AUC = ", round(auc_rf, 2))),
+       col = c("darkgreen"), lwd = 2)
+
+```
+
+
+```{r}
+
+
+```
+

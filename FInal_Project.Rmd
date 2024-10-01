@@ -1,6 +1,6 @@
 ---
 title: "Skin Disease Detection"
-author: "Rohanraje Bhosale"
+author: "Sneha Sonkusare"
 date: "2024-04-30"
 output:
   word_document: default
